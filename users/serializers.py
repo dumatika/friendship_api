@@ -1,6 +1,6 @@
+from django.utils.translation import ugettext_lazy as _
 from rest_framework.exceptions import ValidationError
 from rest_framework.serializers import ModelSerializer, PrimaryKeyRelatedField
-from django.utils.translation import ugettext_lazy as _
 
 from users.models import User
 
@@ -19,7 +19,7 @@ class FriendSerializer(ModelSerializer):
         fields = ('id', 'username', 'friends')
 
 
-class UserSerializer(ModelSerializer):
+class UserDetailedSerializer(ModelSerializer):
     friends = FriendSerializer(many=True, read_only=True)
     friends_id = PrimaryKeyRelatedField(many=True, write_only=True, queryset=User.objects.all(), source='friends')
 
@@ -35,3 +35,9 @@ class UserSerializer(ModelSerializer):
                 code='unique'
             )
         return attrs
+
+
+class UserSerializer(ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'friends')
