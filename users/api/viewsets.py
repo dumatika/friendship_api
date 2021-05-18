@@ -2,8 +2,8 @@ from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, UpdateMode
 from rest_framework.viewsets import GenericViewSet
 
 from users.models import User
-from users.permissions import UserViewSetPermission
-from users.serializers import UserDetailedSerializer, UserSerializer
+from users.api.permissions import UserViewSetPermission
+from users.api.serializers import UserDetailedSerializer, UserSerializer
 
 
 class UserViewSet(ListModelMixin, RetrieveModelMixin, UpdateModelMixin, GenericViewSet):
