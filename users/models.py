@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.db.models import F, Q
+from django.utils import timezone
 
 
 class Friendship(models.Model):
@@ -12,11 +13,11 @@ class Friendship(models.Model):
     partner = models.ForeignKey(
         to='users.User',
         on_delete=models.CASCADE,
-        related_name='friendships_partner'
+        related_name='friendships'
     )
 
     created_at = models.DateTimeField(
-        auto_now=True,
+        default=timezone.now
     )
 
     class Meta:
@@ -34,6 +35,9 @@ class Friendship(models.Model):
                 name='friendship_with_yourself_constraint'
             )
         )
+
+    def __str__(self):
+        return f'Friendship {self.id} of initiator {self.initiator_id} with partner {self.partner_id}'
 
 
 class User(AbstractUser):

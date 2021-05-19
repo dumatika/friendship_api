@@ -1,14 +1,14 @@
 import random
 
 from django.conf import settings
+from django.utils import timezone
 from rest_framework import status
-from rest_framework.exceptions import ErrorDetail
 from rest_framework.reverse import reverse
 from rest_framework.test import APITestCase
 
 from users.api.errors import FRIENDSHIP_WITH_YOURSELF_ERROR
-from users.models import Friendship, User
-from users.api.tests.utils import generate_random_friendships
+from users.api.tests.utils import format_datetime, generate_random_friendships
+from users.models import User
 
 
 class UserViewSetListTestCase(APITestCase):
@@ -31,15 +31,12 @@ class UserViewSetListTestCase(APITestCase):
 class UserViewSetRetrieveTestCase(APITestCase):
     def setUp(self) -> None:
         self.user = User.objects.create(username='test_user')
-        friendships = [
-            Friendship.objects.create(
-                initiator=self.user,
-                partner=User.objects.create(username=f'user_{f}')
-            ) for f in range(10)
-        ]
-        self.friends = list(map(lambda x: x.partner, friendships))
-        # generate friendship between random friends
-        friend_one, friend_two = random.sample(self.friends, 2)
+        for x in range(10):
+            self.user.friends.add(
+                User.objects.create(username=f'test_{x}'),
+                through_defaults={'created_at': timezone.now()}
+            )
+        friend_one, friend_two = random.sample(list(self.user.friends.all()), 2)
         friend_one.friends.add(friend_two)
 
         self.url = reverse('users:users-detail', kwargs={'pk': self.user.pk})
@@ -47,38 +44,38 @@ class UserViewSetRetrieveTestCase(APITestCase):
     def test_retrieve(self):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, {
+        data = {
             'id': self.user.id,
             'username': self.user.username,
             'friends': [{
                 'id': f.id,
                 'username': f.username,
+                'created_at': format_datetime(self.user.friendships.get(initiator=f).created_at),
                 'friends': [{
                     'id': ff.id,
                     'username': ff.username
                 } for ff in f.friends.all()]
-            } for f in self.friends]
-        })
+            } for f in self.user.friends.all()]
+        }
+        self.assertDictEqual(response.data, data)
 
 
 class UserViewSetUpdateTestCase(APITestCase):
     def setUp(self) -> None:
         self.user = User.objects.create(username='test_user')
-        friendships = [
-            Friendship.objects.create(
-                initiator=self.user,
-                partner=User.objects.create(username=f'user_{f}')
-            ) for f in range(10)
-        ]
-        self.friends = list(map(lambda x: x.partner, friendships))
+        for x in range(10):
+            self.user.friends.add(
+                User.objects.create(username=f'test_{x}'),
+                through_defaults={'created_at': timezone.now()}
+            )
         # generate friendship between random friends
-        friend_one, friend_two = random.sample(self.friends, 2)
-        friend_one.friends.add(friend_two)
+        friend_one, friend_two = random.sample(list(self.user.friends.all()), 2)
+        friend_one.friends.add(friend_two, through_defaults={'created_at': timezone.now()})
 
         self.url = reverse('users:users-detail', kwargs={'pk': self.user.pk})
 
     def test_put(self):
-        new_friends = (random.choice(self.friends), User.objects.create(username='test_friend'))
+        new_friends = (random.choice(self.user.friends.all()), User.objects.create(username='test_friend'))
         self.client.force_login(self.user)
         response = self.client.put(
             self.url,
@@ -94,6 +91,7 @@ class UserViewSetUpdateTestCase(APITestCase):
             'friends': [{
                 'id': f.id,
                 'username': f.username,
+                'created_at': format_datetime(self.user.friendships.get(initiator=f).created_at),
                 'friends': [{
                     'id': ff.id,
                     'username': ff.username
@@ -102,7 +100,7 @@ class UserViewSetUpdateTestCase(APITestCase):
         })
 
     def test_patch(self):
-        new_friends = (random.choice(self.friends), User.objects.create(username='test_friend'))
+        new_friends = (random.choice(self.user.friends.all()), User.objects.create(username='test_friend'))
         self.client.force_login(self.user)
         response = self.client.patch(
             self.url,
@@ -116,6 +114,7 @@ class UserViewSetUpdateTestCase(APITestCase):
             'friends': [{
                 'id': f.id,
                 'username': f.username,
+                'created_at': format_datetime(self.user.friendships.get(initiator=f).created_at),
                 'friends': [{
                     'id': ff.id,
                     'username': ff.username
@@ -124,7 +123,7 @@ class UserViewSetUpdateTestCase(APITestCase):
         })
 
     def test_foreign_user_update(self):
-        foreign_user = random.choice(self.friends)
+        foreign_user = random.choice(self.user.friends.all())
         self.client.force_login(foreign_user)
         response_patch = self.client.patch(
             path=self.url,
@@ -162,10 +161,7 @@ class UserViewSetUpdateTestCase(APITestCase):
         self.assertEqual(response_patch.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response_put.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response_patch.data, {
-            'friends_ids': [ErrorDetail(
-                string='You cannot create friendship with yourself',
-                code='unique'
-            )]
+            'friends_ids': [FRIENDSHIP_WITH_YOURSELF_ERROR, ]
         })
         self.assertEqual(response_put.data, {
             'friends_ids': [FRIENDSHIP_WITH_YOURSELF_ERROR, ]
