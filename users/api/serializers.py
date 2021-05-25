@@ -63,7 +63,6 @@ class UserDetailedSerializer(serializers.ModelSerializer):
         for attr, value in m2m_fields:
             field = getattr(instance, attr)
             if attr == 'friends':
-                print('friends update', value)
                 field.set(value, through_defaults={'created_at': timezone.now()})
 
         return self.context['view'].get_object()
